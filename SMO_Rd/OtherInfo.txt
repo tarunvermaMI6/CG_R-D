@@ -1,0 +1,413 @@
+
+//  Makefile
+
+A Makefile is a special file used by the make build automation tool to compile and build programs, typically in languages like C or C++. It defines rules and dependencies that tell make how to compile and link the program.
+
+Benefits
+
+Saves time: Only recompiles files that changed.
+
+Organized: Central place for build logic.
+
+Customizable: You can define multiple build targets (e.g., debug, release, clean, etc.).
+
+  ------ > check projects build folder
+
+// docker-compose.yaml
+
+A docker-compose.yaml file is used to define and run multi-container Docker applications. Here is a basic example of a docker-compose.yaml file that sets up a simple web application using Nginx, Python Flask, and a PostgreSQL database:
+
+docker-compose.yaml 
+
+version: '3.8'
+
+services:
+  springboot-app:
+    image: my-springboot-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/mydb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
+    depends_on:
+      - db
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+
+
+// Docker/Dockerfile
+
+# Use an official OpenJDK runtime as a parent image
+FROM openjdk:17-jdk-slim
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the Spring Boot fat JAR into the image
+COPY target/my-springboot-app.jar app.jar
+
+# Run the JAR file
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+
+ // application.properties
+
+spring.datasource.url=${SPRING_DATASOURCE_URL}
+spring.datasource.username=${SPRING_DATASOURCE_USERNAME}
+spring.datasource.password=${SPRING_DATASOURCE_PASSWORD}
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+
+//Build & Run Instructions
+
+Build your Spring Boot JAR file:
+
+./mvnw clean package
+
+docker-compose up --build
+
+// if you have 4 Spring Boot projects, each in its own folder, and all inside a common parent directory, you can use a single docker-compose.yaml in the parent folder to manage and run all 4 projects together, along with shared services like PostgreSQL
+
+parent-folder/
+├── project-a/
+│   ├── Dockerfile
+│   └── target/project-a.jar
+├── project-b/
+│   ├── Dockerfile
+│   └── target/project-b.jar
+├── project-c/
+│   ├── Dockerfile
+│   └── target/project-c.jar
+├── project-d/
+│   ├── Dockerfile
+│   └── target/project-d.jar
+└── docker-compose.yaml
+
+
+// docker-compose.yaml
+
+version: '3.8'
+
+services:
+  project-a:
+    build:
+      context: ./project-a
+      dockerfile: Dockerfile
+    image: project-a
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/mydb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
+    depends_on:
+      - db
+
+  project-b:
+    build:
+      context: ./project-b
+      dockerfile: Dockerfile
+    image: project-b
+    ports:
+      - "8082:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/mydb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
+    depends_on:
+      - db
+
+  project-c:
+    build:
+      context: ./project-c
+      dockerfile: Dockerfile
+    image: project-c
+    ports:
+      - "8083:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/mydb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
+    depends_on:
+      - db
+
+  project-d:
+    build:
+      context: ./project-d
+      dockerfile: Dockerfile
+    image: project-d
+    ports:
+      - "8084:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/mydb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
+    depends_on:
+      - db
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+
+
+//Notes
+
+Each project is mapped to a different host port (8081, 8082, 8083, 8084) to avoid conflicts.
+
+All projects share the same PostgreSQL container (db) and database (mydb). You can separate them by database if needed.
+
+You must build each JAR before running docker-compose.
+
+
+
+
+// But as I am looking in some project they dont have 
+
+build:
+context: ./project-a
+dockerfile: Dockerfile
+
+If a docker-compose.yaml doesn't include build:, that usually means it's using pre-built Docker images (from Docker Hub or locally built ones), instead of building them from source via Dockerfile.
+
+// Option 1: Using build: (source-code-based image creation)
+
+You're telling Docker Compose to:
+
+Go into the folder (context) where your Dockerfile and project are.
+
+Build an image from that Dockerfile.
+
+Then run the container from that newly built image.
+
+project-a:
+  build:
+    context: ./project-a
+    dockerfile: Dockerfile
+
+This is used when you're actively developing the project and want Docker to build the image automatically from source code.
+
+// Option 2: Using image: only (pre-built image)
+
+You're telling Docker Compose to:
+
+Use an image that already exists, either:
+
+Downloaded from Docker Hub (like postgres:13)
+
+Or already built locally using docker build -t my-app .
+
+project-a:
+  image: my-org/project-a:latest
+  ports:
+    - "8081:8080"
+
+
+This is used in production or deployment pipelines where you don’t want to build the image every time. You assume the image already exists.
+
+// Mixed Example (What you're seeing)
+
+project-a:
+  image: project-a:latest
+  ports:
+    - "8081:8080"
+
+
+This works if:
+
+The image project-a:latest has already been built with:
+
+docker build -t project-a:latest ./project-a
+
+docker pull myorg/project-a:latest
+
+| What You See in `docker-compose.yaml` | Meaning                                             |
+| ------------------------------------- | --------------------------------------------------- |
+| `build:`                              | Build image from source code in that folder         |
+| `image:`                              | Use an already built image (local or from registry) |
+| Both `build` and `image`              | Build and **tag** the image with a name             |
+| Only `image`                          | You must build or pull the image beforehand         |
+
+
+// But how does it know that from which repo it has to pull
+
+
+Ah, I see what you're getting at! The docker-compose.yaml file defines the name of the image that should be used, but you need to tell Docker where to pull the image from. Docker looks for images in the following ways:
+
+Local images: If the image name is not fully qualified (i.e., no registry specified), Docker will first look for the image locally.
+
+Docker Hub (default): If no registry is specified, Docker will try to pull the image from Docker Hub (the default registry).
+
+Custom registries: If you want to pull from a custom repository or private registry, you need to specify the registry URL.
+
+
+Ways to Specify the Image Location
+
+// 1. Local images
+
+If you build the image locally with the docker build command, Docker will look in your local image cache. For example, if you've built an image named project-a:latest, you can just reference it as:
+
+project-a:
+  image: project-a:latest
+
+
+// 2. Docker Hub (default registry)
+
+If your images are pushed to Docker Hub (or another public registry), you can reference them by their full name:
+
+project-a:
+  image: username/project-a:latest
+  
+ In this case:
+
+username is your Docker Hub username.
+
+project-a is the name of your image.
+
+latest is the tag (you can change this tag as needed).
+
+docker push username/project-a:latest
+
+
+// 3. Private Registries
+
+ If you have a private Docker registry (e.g., in AWS ECR, Azure Container Registry, GitLab, etc.), specify the full registry URL:
+ 
+  project-a:
+  image: myregistry.com/project-a:latest
+
+This would pull the image from myregistry.com (your private registry), so you need to log in first:
+
+docker login myregistry.com
+
+Then, when you docker-compose up, it will fetch the image from that registry.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
