@@ -307,7 +307,126 @@ Then, when you docker-compose up, it will fetch the image from that registry.
 
 
 
+default:
+  image: maven:3.9.9-eclipse-temurin-17
 
+before_script:
+  - cd smo-backend/sdnc_client_util
+  - mvn clean install
+  - cd ..
+
+after_script:
+  - echo "Running common cleanup commands..."
+  - apt-get clean
+
+stages:
+  - build_and_test_fault-manager
+  - build_and_test_configuration-manager
+  # - build_and_test_performance-manager
+  - build_and_test_ran-onboarder
+  - build_and_test_topology-manager
+  - package_artifacts
+
+build_and_test_fault-manager:
+  stage: build_and_test_fault-manager
+  script:
+    - cd fault_manager
+    - mvn clean install
+    - mvn jacoco:report
+    # - ls -la target/site/jacoco/
+  artifacts:
+    paths:
+      - smo-backend/fault_manager/target/site/jacoco/
+  tags:
+    - docker
+  rules:
+    - changes:
+        - smo-backend/fault_manager/**
+
+build_and_test_configuration-manager:
+  stage: build_and_test_configuration-manager
+  script:
+    - cd configuration_manager
+    - mvn clean install
+    - mvn jacoco:report
+    # - ls -la target/site/jacoco/
+  artifacts:
+    paths:
+      - smo-backend/configuration_manager/target/site/jacoco/
+  tags:
+    - docker
+  rules:
+    - changes:
+        - smo-backend/configuration_manager/**
+
+# build_and_test_performance-manager:
+#   stage: build_and_test_performance-manager
+#   script:
+#     - cd performance_manager
+#     - mvn clean install
+#     - mvn jacoco:report
+#   artifacts:
+#     paths:
+#       - smo-backend/performance_manager/target/site/jacoco/
+#   tags:
+#     - docker
+# rules:
+#     - changes:
+#         - smo-backend/performance_manager/**
+
+build_and_test_ran-onboarder:
+  stage: build_and_test_ran-onboarder
+  script:
+    - cd ran-onboarder
+    - mvn clean install
+    - mvn jacoco:report
+  artifacts:
+    paths:
+      - smo-backend/ran-onboarder/target/site/jacoco/
+  tags:
+    - docker
+  rules:
+    - changes:
+        - smo-backend/ran-onboarder/**
+
+build_and_test_topology-manager:
+  stage: build_and_test_topology-manager
+  script:
+    - cd topology_manager
+    - mvn clean install
+    - mvn jacoco:report
+  artifacts:
+    paths:
+      - smo-backend/topology_manager/target/site/jacoco/
+  tags:
+    - docker
+  rules:
+    - changes:
+        - smo-backend/topology_manager/**
+
+package_artifacts:
+  stage: package_artifacts
+  before_script: []
+  script:
+    - apt-get update && apt-get install -y zip
+    - if [ -d smo-backend/fault_manager/target/site/jacoco ]; then mkdir -p combined_artifacts/fault_manager && cp -r smo-backend/fault_manager/target/site/jacoco/* combined_artifacts/fault_manager/; fi
+    - if [ -d smo-backend/configuration_manager/target/site/jacoco ]; then mkdir -p combined_artifacts/configuration_manager && cp -r smo-backend/configuration_manager/target/site/jacoco/* combined_artifacts/configuration_manager/; fi
+    # - if [ -d smo-backend/performance_manager/target/site/jacoco ]; then mkdir -p combined_artifacts/performance_manager && cp -r smo-backend/performance_manager/target/site/jacoco/* combined_artifacts/performance_manager/; fi
+    - if [ -d smo-backend/ran-onboarder/target/site/jacoco ]; then mkdir -p combined_artifacts/ran-onboarder && cp -r smo-backend/ran-onboarder/target/site/jacoco/* combined_artifacts/ran-onboarder/; fi
+    - if [ -d smo-backend/topology_manager/target/site/jacoco ]; then mkdir -p combined_artifacts/topology_manager && cp -r smo-backend/topology_manager/target/site/jacoco/* combined_artifacts/topology_manager/; fi
+    - zip -r combined_artifacts.zip combined_artifacts
+  artifacts:
+    paths:
+      - combined_artifacts.zip
+  tags:
+    - docker
+  rules:
+    - changes:
+        - smo-backend/fault_manager/**
+        - smo-backend/configuration_manager/**
+        # - smo-backend/performance_manager/**
+        - smo-backend/ran-onboarder/**
+        - smo-backend/topology_manager/**
 
 
 
