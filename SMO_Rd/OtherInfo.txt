@@ -303,3 +303,26 @@ This would pull the image from myregistry.com (your private registry), so you ne
 docker login myregistry.com
 
 Then, when you docker-compose up, it will fetch the image from that registry.
+
+
+
+sonarqube_scan:
+  stage: sonar
+  image: maven:3.9.9-eclipse-temurin-17
+  script:
+    - cd smo-backend/fault_manager
+    - mvn verify sonar:sonar \
+        -Dsonar.projectKey=SMO \
+        -Dsonar.projectName=SMO \
+        -Dsonar.projectVersion=1.0 \
+        -Dsonar.sources=src/main \
+        -Dsonar.tests=src/test \
+        -Dsonar.java.binaries=target/classes \
+        -Dsonar.host.url=https://sonarqube.engine.capgemini.com \
+        -Dsonar.login=$SONAR_TOKEN
+  rules:
+    - changes:
+        - smo-backend/fault_manager/**
+  tags:
+    - docker
+
