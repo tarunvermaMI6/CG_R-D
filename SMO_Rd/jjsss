@@ -1,6 +1,7 @@
 default:
   image: maven:3.9.9-eclipse-temurin-17
 
+# define variables 
 variables:
   SONAR_HOST_URL: "https://sonarqube.engine.capgemini.com"
   FM_PROJECT_KEY: "SMO_FM"
@@ -17,135 +18,174 @@ variables:
   SM_LOGIN_TOKEN: "sqp_16789b9adf4605d521e3f73cfc95b005c4dce8ec"
   TM_LOGIN_TOKEN: "sqp_2c83925fa82705811a67b50cba8dc376a7657fab"
   UM_LOGIN_TOKEN: "sqp_cd13d2a67ec54f7f0ceab5228a63f0f74fee81ae"
-  USE_BRANCH: "SMO-538_cicd"
+  USE_BRANCH: "ci_cd_updated"
+  USER_TOKEN: "squ_c8516f76c6b484560e6dbaa1ac8cd025e3dfd4c8"
+
+# sdnc is needed as dependecy in other modules 
 before_script:
   - cd smo-backend/sdnc_client_util
   - mvn clean install
   - cd ..
 
+# cleaning local repo of downloaded package files
 after_script:
   - echo "Running common cleanup commands..."
   - apt-get clean
 
+# creating default template for modules having UT
+.default-maven-sonar-jacoco-job: &default-maven-sonar-jacoco-job
+  image: maven:3.9.9-eclipse-temurin-17
+  tags:
+    - docker
+  script:
+    #- apt-get update && apt-get install -y unzip
+    - cd $MODULE_PATH
+    - mvn clean install
+    - mvn jacoco:report
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$USE_BRANCH" ]; then
+        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.1.2184:sonar \
+        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+        -Dsonar.host.url=$SONAR_HOST_URL \
+        -Dsonar.login=${SONAR_LOGIN_TOKEN} \
+        -Dsonar.exclusions=**/test/**
+
+      sleep 10
+
+      mkdir -p target/site/jacoco
+
+      curl -f -u ${USER_TOKEN}: -o target/site/jacoco/sonar-report.zip "${SONAR_HOST_URL}/api/cnesreport/report?key=SMO_FM&language=en_US&author=tverma1&token=squ_e87c0527eed17647e84ec802ddb5eaee134025a8&enableDocx=false&enableMd=false&enableXlsx=true&enableCsv=false&enableConf=false&generation=Generate"
+
+      #unzip -o target/site/jacoco/sonar-report.zip -d target/site/jacoco
+
+      else
+         echo "Skipping Sonarqube analysis of ${MODULE_NAME} for non-main branch"
+      fi
+  artifacts:
+      paths:
+        - smo-backend/${MODULE_NAME}/target/site/jacoco
+  rules:
+    - changes:
+      - smo-backend/${MODULE_PATH}/**/*                
+
+# creating default template for modules without UT
+.default-maven-sonar-job: &default-maven-sonar-job
+  image: maven:3.9.9-eclipse-temurin-17
+  tags:
+    - docker
+  script:
+    - cd $MODULE_PATH
+    - mvn clean install
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$USE_BRANCH" ]; then
+        mvn sonar:sonar \
+        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+        -Dsonar.host.url=$SONAR_HOST_URL \
+        -Dsonar.login=${SONAR_LOGIN_TOKEN}
+      else
+         echo "Skipping Sonarqube analysis of ${MODULE_NAME} for non-main branch"
+      fi
+  artifacts:
+      paths:
+        - smo-backend/${MODULE_NAME}/target/site/jacoco
+  rules:
+    - changes:
+      - smo-backend/${MODULE_PATH}/**/* 
+
+# defining jobs step by step
+# every job will run in diffrent runner
 stages:
   - build_and_test_fault-manager
   - build_and_test_configuration-manager
-  # - build_and_test_performance-manager
+  #- build_and_test_performance-manager
   - build_and_test_ran-onboarder
-  - build_and_test_topology-manager  
+  - build_and_test_topology-manager
+  - build_software_manager
+  - build_user-management  
   - package_artifacts
   - send_email
 
 build_and_test_fault-manager:
   stage: build_and_test_fault-manager
-  script:
-    - cd fault_manager
-    - mvn clean install
-    - mvn jacoco:report
-    - |
-      if [ "$CI_COMMIT_BRANCH" = "$USE_BRANCH" ]; then
-        mvn sonar:sonar -Dsonar.projectKey=$FM_PROJECT_KEY -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$FM_LOGIN_TOKEN 
-       else
-         echo "Skipping SonarQube analysis of configuration_manager for non-main branch"
-       fi  
-  artifacts:
-    paths:
-      - smo-backend/fault_manager/target/site/jacoco/
-  tags:
-    - docker
-  rules:
-    - changes:
-        - smo-backend/fault_manager/**/*
+  extends: .default-maven-sonar-jacoco-job
+  variables:
+    MODULE_PATH: "fault_manager"
+    MODULE_NAME: "fault_manager"
+    SONAR_PROJECT_KEY: "$FM_PROJECT_KEY"
+    SONAR_LOGIN_TOKEN: "$FM_LOGIN_TOKEN"
 
 build_and_test_configuration-manager:
   stage: build_and_test_configuration-manager
-  script:
-    - cd configuration_manager
-    - mvn clean install
-    - mvn jacoco:report
-    # - ls -la target/site/jacoco/
-    - |
-      if [ "$CI_COMMIT_BRANCH" = "$USE_BRANCH" ]; then
-        mvn sonar:sonar -Dsonar.projectKey=$CM_PROJECT_KEY -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$CM_LOGIN_TOKEN 
-       else
-         echo "Skipping SonarQube analysis of configuration_manager for non-main branch"
-       fi  
-  artifacts:
-    paths:
-      - smo-backend/configuration_manager/target/site/jacoco/
-  tags:
-    - docker
-  rules:
-    - changes:
-        - smo-backend/configuration_manager/**/*
+  extends: .default-maven-sonar-jacoco-job
+  variables:
+    MODULE_PATH: "configuration_manager"
+    MODULE_NAME: "configuration_manager"
+    SONAR_PROJECT_KEY: "$CM_PROJECT_KEY"
+    SONAR_LOGIN_TOKEN: "$CM_LOGIN_TOKEN"
+  
 
-# build_and_test_performance-manager:
-#   stage: build_and_test_performance-manager
-#   script:
-#     - cd performance_manager
-#     - mvn clean install
-#     - mvn jacoco:report
-#   artifacts:
-#     paths:
-#       - smo-backend/performance_manager/target/site/jacoco/
-#   tags:
-#     - docker
-# rules:
-#     - changes:
-#         - smo-backend/performance_manager/**
+#build_and_test_performance-manager:
+ # stage: build_and_test_performance-manager
+  #variables:
+   # MODULE_PATH: "performance-manager"
+    #MODULE_NAME: "performance-manager"
+    #SONAR_PROJECT_KEY: "$PM_PROJECT_KEY"
+    #SONAR_LOGIN_TOKEN: "$PM_LOGIN_TOKEN"
+ 
 
 build_and_test_ran-onboarder:
   stage: build_and_test_ran-onboarder
-  script:
-    - cd ran-onboarder
-    - mvn clean install
-    - mvn jacoco:report
-    - |
-      if [ "$CI_COMMIT_BRANCH" = "$USE_BRANCH" ]; then
-        mvn sonar:sonar -Dsonar.projectKey=$RO_PROJECT_KEY -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$RO_LOGIN_TOKEN 
-       else
-         echo "Skipping SonarQube analysis of configuration_manager for non-main branch"
-       fi 
-  artifacts:
-    paths:
-      - smo-backend/ran-onboarder/target/site/jacoco/
-  tags:
-    - docker
-  rules:
-    - changes:
-        - smo-backend/ran-onboarder/**/*
+  extends: .default-maven-sonar-jacoco-job
+  variables:
+    MODULE_PATH: "ran-onboarder"
+    MODULE_NAME: "ran-onboarder"
+    SONAR_PROJECT_KEY: "$RO_PROJECT_KEY"
+    SONAR_LOGIN_TOKEN: "$RO_LOGIN_TOKEN"
+  
 
 build_and_test_topology-manager:
   stage: build_and_test_topology-manager
-  script:
-    - cd topology_manager
-    - mvn clean install
-    - mvn jacoco:report
-    - |
-      if [ "$CI_COMMIT_BRANCH" = "$USE_BRANCH" ]; then
-        mvn sonar:sonar -Dsonar.projectKey=$TM_PROJECT_KEY -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$TM_LOGIN_TOKEN 
-       else
-         echo "Skipping SonarQube analysis of configuration_manager for non-main branch"
-       fi 
-  artifacts:
-    paths:
-      - smo-backend/topology_manager/target/site/jacoco/
-  tags:
-    - docker
-  rules:
-    - changes:
-        - smo-backend/topology_manager/**/*
+  extends: .default-maven-sonar-jacoco-job
+  variables:
+    MODULE_PATH: "topology_manager"
+    MODULE_NAME: "topology_manager"
+    SONAR_PROJECT_KEY: "$TM_PROJECT_KEY"
+    SONAR_LOGIN_TOKEN: "$TM_LOGIN_TOKEN"
 
+build_software_manager:
+  stage: build_software_manager
+  extends: .default-maven-sonar-job
+  variables:
+    MODULE_PATH: "software_manager"
+    MODULE_NAME: "software_manager"
+    SONAR_PROJECT_KEY: "$SM_PROJECT_KEY"
+    SONAR_LOGIN_TOKEN: "$SM_LOGIN_TOKEN"
+
+build_user-management:
+  stage: build_user-management
+  extends: .default-maven-sonar-job
+  variables:
+    MODULE_PATH: "user-management"
+    MODULE_NAME: "user-management"
+    SONAR_PROJECT_KEY: "$UM_PROJECT_KEY"
+    SONAR_LOGIN_TOKEN: "$UM_LOGIN_TOKEN"    
+
+# collecting the jacoco reports 
 package_artifacts:
   stage: package_artifacts
   before_script: []
   script:
     - apt-get update && apt-get install -y zip
-    - if [ -d smo-backend/fault_manager/target/site/jacoco ]; then mkdir -p combined_artifacts/fault_manager && cp -r smo-backend/fault_manager/target/site/jacoco/* combined_artifacts/fault_manager/; fi
-    - if [ -d smo-backend/configuration_manager/target/site/jacoco ]; then mkdir -p combined_artifacts/configuration_manager && cp -r smo-backend/configuration_manager/target/site/jacoco/* combined_artifacts/configuration_manager/; fi
-    # - if [ -d smo-backend/performance_manager/target/site/jacoco ]; then mkdir -p combined_artifacts/performance_manager && cp -r smo-backend/performance_manager/target/site/jacoco/* combined_artifacts/performance_manager/; fi
-    - if [ -d smo-backend/ran-onboarder/target/site/jacoco ]; then mkdir -p combined_artifacts/ran-onboarder && cp -r smo-backend/ran-onboarder/target/site/jacoco/* combined_artifacts/ran-onboarder/; fi
-    - if [ -d smo-backend/topology_manager/target/site/jacoco ]; then mkdir -p combined_artifacts/topology_manager && cp -r smo-backend/topology_manager/target/site/jacoco/* combined_artifacts/topology_manager/; fi
+    - |
+      for module in fault_manager configuration_manager ran-onboarder topology_manager; do
+        JACOCO_DIR="smo-backend/$module/target/site/jacoco"
+        if [ -d "$JACOCO_DIR" ]; then
+        mkdir -p "combined_artifacts/$module"
+        cp -r "$JACOCO_DIR"/* "combined_artifacts/$module/"
+        else
+        echo "No JaCoCo report found for $module"
+        fi
+       done
     - zip -r combined_artifacts.zip combined_artifacts
   artifacts:
     paths:
@@ -154,101 +194,56 @@ package_artifacts:
     - docker
   rules:
     - changes:
-        - smo-backend/fault_manager/**
-        - smo-backend/configuration_manager/**
-        # - smo-backend/performance_manager/**
-        - smo-backend/ran-onboarder/**
-        - smo-backend/topology_manager/**
-
-.send_email:
-  stage: send_email
-  image: ubuntu:latest
-  before_script:
-    - apt-get update && apt-get install -y msmtp sharutils mutt
-    - echo -e "account default\nhost email-smtp.eu-west-3.amazonaws.com\nport 587\nauth on\nuser $SMTP_USER\npassword $SMTP_PASS\nfrom noreply@engine.capgemini.com\ntls on\ntls_starttls on\nlogfile ~/.msmtp.log" > ~/.msmtprc
-    - chmod 600 ~/.msmtprc
-
-  script:
-    - echo "Creating email body..."    
-    - echo "Hello Team,\n\nThe job has completed with status $CI_JOB_STATUS\n" > email_body.txt
-    - echo "Job Link:- $CI_PIPELINE_URL\n\n Artifacts are attached." >> email_body.txt
-    - echo "Hello" >> test.txt
-    - mutt -s "Job Notification - $CI_JOB_NAME" -a test.txt -- preeja.jayarajan@capgemini.com rohan.b.jadhav@capgemini.com < email_body.txt  
-  after_script:
-    - echo -e "Subject:SMO-UT-Coverage Job Status\n\nHello Team,\n\nSMO-UT-Coverage Status.\n\nStatus:- $CI_JOB_STATUS\nJob Link:- $CI_PIPELINE_URL\n\nBest Regards,\nSMO Team" | msmtp --debug preeja.jayarajan@capgemini.com
-       
-#      - echo -e "Subject:SMO-UT-Coverage Job Status\n\nHello Team,\n\nSMO-UT-Coverage Status.\n\nStatus:- $CI_JOB_STATUS\nJob Link:- $CI_PIPELINE_URL\n\nBest Regards,\nSMO Team" | msmtp --debug preeja.jayarajan@capgemini.com pooja.a.garg@capgemini.com
-#    - cat smo-backend/fault_manager/target/site/jacoco/index.html | msmtp --debug preeja.jayarajan@capgemini.com
-  tags:
-    - dind 
-
-.email-notification:
-    stage: send_email
-    image: ubuntu:latest
-    before_script:
-        - apt-get update && apt-get install -y msmtp sharutils mutt
-        - echo -e "account default\nhost email-smtp.eu-west-3.amazonaws.com\nport 587\nauth on\nuser $SMTP_USER\npassword $SMTP_PASS\nfrom noreply@engine.capgemini.com\ntls on\ntls_starttls on\nlogfile ~/.msmtp.log" > ~/.msmtprc
-        - chmod 600 ~/.msmtprc
-    script:
-        - echo "Hello" >> test.txt
-        - ls -la
-        - |
-           (
-            echo "Subject:SMO-UT-Coverage Job Status"
-            echo "To:preeja.jayarajan@capgemini.com,rohan.b.jadhav@capgemini.com"
-            echo "MIME-Version:1.0"
-            echo "Content-Type:multipart/mixed; boundary=\"FILEBOUNDARY\""
-            echo
-            echo "--FILEBOUNDARY"
-            echo "Content-Type:text/plain"
-            echo
-            echo -e "Hello, please find the attached txt files \n\nBuild_Number:$CI_PIPELINE_ID\ncommit_id:$CI_COMMIT_BRANCH\nBuild_URL:\n$CI_PIPELINE_URL\n\n\nThanks & Regards,\nDevOps Team"
-            echo
-            echo "--FILEBOUNDARY"
-            echo "Content-Type:text/plain; name=\"test.txt\""
-            echo "Content-Transfer-Encoding:base64"
-            echo "Content-Disposition:attachment; filename=\"test.txt\""
-            echo
-            base64 test.txt
-            echo
-            echo "--FILEBOUNDARY--"
-            ) | msmtp -t
-    tags:
-        - dind
+        - smo-backend/fault_manager/**/*
+        - smo-backend/configuration_manager/**/*
+        # - smo-backend/performance_manager/**/*
+        - smo-backend/ran-onboarder/**/*
+        - smo-backend/topology_manager/**/*
+        
 
 email-notification:
     stage: send_email
     image: ubuntu:latest
+    dependencies:
+      - package_artifacts
     before_script:
         - apt-get update && apt-get install -y msmtp sharutils mutt
         - echo -e "account default\nhost email-smtp.eu-west-3.amazonaws.com\nport 587\nauth on\nuser $SMTP_USER\npassword $SMTP_PASS\nfrom noreply@engine.capgemini.com\ntls on\ntls_starttls on\nlogfile ~/.msmtp.log" > ~/.msmtprc
         - chmod 600 ~/.msmtprc
     script:
         - echo "Preparing email notification..."
-        - echo "Hello" >> test.txt
+        - ls -lh combined_artifacts.zip
         - ls -la
-    after_script:
-        - set -x
         - |
            (
             echo "Subject:SMO-UT-Coverage Job Status: $CI_JOB_STATUS"
-            echo "To:preeja.jayarajan@capgemini.com,tarun.b.verma@capgemini.com"
+            echo "To:tarun.b.verma@capgemini.com,pooja.a.garg@capgemini.com,suhail.khan@capgemini.com"
             echo "MIME-Version:1.0"
             echo "Content-Type:multipart/mixed; boundary=\"FILEBOUNDARY\""
             echo
             echo "--FILEBOUNDARY"
             echo "Content-Type:text/plain"
             echo
-            echo -e "Hello, please find the attached txt files \n\nBuild_Number: $CI_PIPELINE_ID\nCommit_Branch: $CI_COMMIT_BRANCH\nJob_Status: $CI_JOB_STATUS\nBuild_URL:\n$CI_PIPELINE_URL\n\n\nThanks & Regards,\nDevOps Team"
+            echo -e "Hello, please find the attached combined artifacts \n\nBuild_Number: $CI_PIPELINE_ID\nCommit_Branch: $CI_COMMIT_BRANCH\nJob_Status: $CI_JOB_STATUS\nBuild_URL:\n$CI_PIPELINE_URL\n\n\nThanks & Regards,\nSMO Team"
             echo
             echo "--FILEBOUNDARY"
-            echo "Content-Type:text/plain; name=\"test.txt\""
+            echo "Content-Type:application/zip; name=\"combined_artifacts.zip\""
             echo "Content-Transfer-Encoding:base64"
-            echo "Content-Disposition:attachment; filename=\"test.txt\""
+            echo "Content-Disposition:attachment; filename=\"combined_artifacts.zip\""
             echo
-            base64 test.txt
+            base64 combined_artifacts.zip
             echo
             echo "--FILEBOUNDARY--"
             ) | msmtp -t
+    artifacts:
+      paths:
+        - combined_artifacts.zip      
     tags:
         - dind
+    rules:
+    - changes:
+        - smo-backend/fault_manager/**/*
+        - smo-backend/configuration_manager/**/*
+        # - smo-backend/performance_manager/**/*
+        - smo-backend/ran-onboarder/**/*
+        - smo-backend/topology_manager/**/*    
